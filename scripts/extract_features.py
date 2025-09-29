@@ -57,7 +57,11 @@ def extract_features():
         'data_root': config.data.data_root,
         'batch_size': config.data.batch_size,
         'image_size': config.data.image_size,
-        'compute_norm': config.data.compute_norm
+        'compute_norm': config.data.compute_norm,
+        'stl10_dataset_repo': config.data.stl10_dataset_repo,
+        'stl10_train_split': config.data.stl10_train_split,
+        'stl10_test_split': config.data.stl10_test_split,
+        'stl10_token': config.data.stl10_token
     }
     
     data_loader = DatasetLoader(data_config)

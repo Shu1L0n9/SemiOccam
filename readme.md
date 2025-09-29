@@ -28,6 +28,15 @@ from datasets import load_dataset
 ds = load_dataset("Shu1L0n9/CleanSTL-10")
 ```
 
+> 🔐 Running the provided scripts (for example `scripts/extract_features.py`) will automatically pick up a
+> Hugging Face token stored in the `HF_TOKEN` environment variable or the `stl10_token` field in
+> `src/config/config.py`. Export your token before launching a script:
+>
+> ```bash
+> export HF_TOKEN=hf_your_token_here
+> python scripts/extract_features.py --dataset_type stl10
+> ```
+
 ### 🔧 Load with WebDataset
 
 ```python
@@ -156,6 +165,7 @@ jupyter lab experiment.ipynb
 The main configuration file is located at `src/config/config.py`, including:
 
 - **Data config**: Dataset type, path, batch size, etc.
+- **STL-10 config**: Hugging Face repository (`stl10_dataset_repo`), split names (`stl10_train_split`, `stl10_test_split`), and optional authentication token (`stl10_token`).
 - **Model config**: Number of PCA components, number of GMM components, convergence threshold, etc.
 - **ViT config**: Pretrained model selection, device configuration, etc.
 
