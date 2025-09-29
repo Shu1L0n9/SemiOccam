@@ -1,12 +1,62 @@
+import os
+import random
+from collections import defaultdict
+from typing import Optional
+
+import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import Dataset, DataLoader
-import os
+from datasets import DownloadConfig, load_dataset
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
-import numpy as np
-from collections import defaultdict
-import random
+
+from huggingface_hub.utils import HfHubHTTPError
+from requests.exceptions import (
+    ConnectionError as RequestsConnectionError,
+    HTTPError as RequestsHTTPError,
+    ProxyError,
+)
+
+
+class HuggingFaceImageDataset(Dataset):
+    """Wrap a Hugging Face dataset to provide torchvision-style transforms."""
+
+    def __init__(self, dataset, transform: Optional[transforms.Compose] = None):
+        self.dataset = dataset
+        self._transform = transform
+
+    @property
+    def transform(self):
+        return self._transform
+
+    @transform.setter
+    def transform(self, value):
+        self._transform = value
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        example = self.dataset[idx]
+        image = example["image"]
+        if not isinstance(image, Image.Image):
+            image = Image.fromarray(image)
+
+        if self._transform is not None:
+            image = self._transform(image)
+
+        label = example.get("label", -1)
+        if label is None:
+            label = -1
+
+        try:
+            label = int(label)
+        except (TypeError, ValueError):
+            label = -1
+
+        return image, label
 
 def compute_normalization(dataset, batch_size=1024, input_size=32):
     """Compute normalization parameters for the dataset"""
@@ -143,17 +193,50 @@ class DatasetLoader:
     def _load_datasets(self):
         """Load datasets according to configuration"""
         if self.dataset_type == 'stl10':
-            self.train_dataset = torchvision.datasets.STL10(
-                root=self.config.get('data_root', './data'),
-                split='train',
-                download=True,
+            dataset_repo = self.config.get('stl10_dataset_repo', 'Shu1L0n9/CleanSTL-10')
+            train_split = self.config.get('stl10_train_split', 'train_labeled')
+            test_split = self.config.get('stl10_test_split', 'test')
+            token = self.config.get('stl10_token') or os.getenv('HF_TOKEN')
+
+            download_config = DownloadConfig(token=token) if token else None
+
+            try:
+                stl10_dataset = load_dataset(
+                    dataset_repo,
+                    download_config=download_config,
+                )
+            except (ProxyError, RequestsConnectionError, ConnectionError) as exc:
+                raise RuntimeError(
+                    "Failed to download the STL-10 dataset from Hugging Face due to a network or proxy "
+                    "error. Please verify your internet connection, proxy configuration, or download the "
+                    "dataset manually via `huggingface-cli` before retrying."
+                ) from exc
+            except (RequestsHTTPError, HfHubHTTPError) as exc:
+                raise RuntimeError(
+                    f"Failed to access dataset '{dataset_repo}' on the Hugging Face Hub. "
+                    "Ensure the repository exists and that your access token has permission to read it."
+                ) from exc
+
+            missing_splits = [
+                split_name
+                for split_name in (train_split, test_split)
+                if split_name not in stl10_dataset
+            ]
+            if missing_splits:
+                available_splits = ", ".join(sorted(stl10_dataset.keys()))
+                raise KeyError(
+                    "The following STL-10 splits could not be found in the Hugging Face dataset: "
+                    f"{', '.join(missing_splits)}. Available splits: {available_splits}. "
+                    "Please verify your configuration."
+                )
+
+            self.train_dataset = HuggingFaceImageDataset(
+                stl10_dataset[train_split],
                 transform=self.train_transform
             )
-            
-            self.test_dataset = torchvision.datasets.STL10(
-                root=self.config.get('data_root', './data'),
-                split='test',
-                download=True,
+
+            self.test_dataset = HuggingFaceImageDataset(
+                stl10_dataset[test_split],
                 transform=self.test_transform
             )
             

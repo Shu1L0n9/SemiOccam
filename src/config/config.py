@@ -14,6 +14,10 @@ class DataConfig:
     batch_size: int = 64
     image_size: int = 518
     compute_norm: bool = True
+    stl10_dataset_repo: str = 'Shu1L0n9/CleanSTL-10'
+    stl10_train_split: str = 'train_labeled'
+    stl10_test_split: str = 'test'
+    stl10_token: Optional[str] = os.getenv('HF_TOKEN')
     
     @property
     def n_classes(self) -> int:
